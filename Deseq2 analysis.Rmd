@@ -1,0 +1,463 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-07-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+First we install al the necessary libraries:
+
+```{r}
+library(tidyverse)
+library(DESeq2)
+library(knitr)
+library(rtracklayer)
+library(RColorBrewer)
+library(pheatmap)
+```
+
+# D27-35 VS D12-13
+
+## Start of the analysis.
+
+
+```{r}
+# Import rawcounts generated from Salmon after the previous RNA-seq analysis
+library(readxl)
+rawcounts <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/salmon/Table_Rawcounts_.xlsx")
+# Change names of the columns
+colnames(rawcounts) <- c("gene_id", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+# Be sure all raw counts data is an integer
+rawcounts$d12_s2 <- as.integer(as.character(rawcounts$d12_s2))
+rawcounts$d12_s3 <- as.integer(as.character(rawcounts$d12_s3))
+rawcounts$d13_s1 <- as.integer(as.character(rawcounts$d13_s1))
+rawcounts$d13_s2 <- as.integer(as.character(rawcounts$d13_s2))
+rawcounts$d27_s1 <- as.integer(as.character(rawcounts$d27_s1))
+rawcounts$d27_s2 <- as.integer(as.character(rawcounts$d27_s2))
+rawcounts$d35_s1 <- as.integer(as.character(rawcounts$d35_s1))
+rawcounts$d35_s2 <- as.integer(as.character(rawcounts$d35_s2))
+rawcounts$d35_s3 <- as.integer(as.character(rawcounts$d35_s3))
+# Convert the column with the gene id in rows to proceed with the further analysis
+rawcounts %>% as.data.frame() %>% 
+  column_to_rownames(var ="gene_id") -> rawcounts
+```
+
+## Creation of metadata
+
+Creation of vector containing metadata for the samples
+
+```{r}
+# In this case we generate only one vector since the only condition we need to take into account is the age of the CRBOs
+age <- c("d12-13","d12-13","d12-13", "d12-13", "d27-35", "d27-35", "d27-35", "d27-35","d27-35")
+```
+
+Combine the vectors in a data frame and then add the exact names of the samples:
+
+```{r}
+info.data <- data.frame(age)
+rownames(info.data) <- c("d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+info.data
+```
+
+## Check sample order
+
+Row names in the metadata data frame and column names in the rawcounts data frame should be the same
+
+```{r}
+# We need to get a TRUE message if we want to continue using the data. 
+all(rownames(info.data) == colnames(rawcounts))
+```
+
+## Create the DESeq2 object
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = rawcounts,
+                              colData = info.data,
+                              design = ~ age)
+dds
+# Now we select the levels of the comparison. Here only 2 levels since we will put together 12 and 13 samples and 27 and 35 samples. Control condition will be 12-13 days samples and that is the reason why they go first
+dds$age <- factor(dds$age, levels = c("d12-13", "d27-35"))
+```
+
+## Unsupervised clustering analysis: log transformation 
+
+VST means variance stabilizing transformations and produce trnasformed data on the log2 scale which has been normalized with respect to library size. The point of this is to remove the dependence of the variance of the mean, particularly the high variance of the logarithm of count data when the mean is low. The argument blind should be equal to TRUE when is used in order to compare samples in a manner wholly unbiased by the information about experimental groups. However, blind dispersion estimation is not the appropiate choice if one expects that many of the majority of genes will have large differences in counts which are explainable by the experimental design
+
+```{r}
+vst <- vst(dds, blind = TRUE)
+```
+
+## Heatmap of the sample-to-sample correlation
+
+```{r}
+# the assay function extract the vst matrix from the vst object
+vst_matrix <- assay(vst) 
+# we compute pairwise correlation values
+vst_cor <- cor(vst_matrix)
+# we generate a heatmap in which we can see the correlation values. Similar to sample to samples distances heatmap that will be done afterwards. This is not included in the memory
+pheatmap(vst_cor, cluster_cols = TRUE, show_rownames = TRUE, show_colnames = FALSE, cluster_rows = TRUE, annotation_col = info.data)
+```
+
+## Heatmap of the sample-to-sample distances. Extracting transformed values
+
+For the sample clustering, we apply the dist function to the transposase of the transformed count matrix to get sample-to-sample distances. A heatmap of this distance matrix gives us an overview over SIMILARITIES and DISSIMILARITIES between samples
+
+```{r}
+# vst transformation as explained above
+vsd <- vst(dds, blind=FALSE)
+# dist function to the transposase of the transformed count matrix to get sample-to-sample distances instead of correlation values as before
+sampleDists <- dist(t(assay(vsd)))
+# generation of a matrix with the sample distance data
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$age)
+colnames(sampleDistMatrix) <- NULL
+# generation of a heatmap with the sample to samples distance matrix
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix, cluster_rows = TRUE, cluster_cols = TRUE,col=colors, show_rownames = TRUE)
+```
+
+## PCA
+
+This command will plot automatically PC1 and PC2: The objec has to be a DESeqTransform object, with data in assay(x), produced by either rlog or vst.
+
+```{r}
+# we produce the PCA plot using the vst object and the age vector of metadata
+plotPCA(vst, intgroup = c("age"))
+```
+
+
+## Differentail expression analysis
+
+The standard differential expression analysis steps are wrapped into a single function, DESeq:
+
+```{r}
+dds <- DESeq(dds)
+```
+
+The function results() extracts a results table from a DESeq analysis giving base means across samples, log2 fold changes, standard errors, test statistics, pvalues and adj p values.
+The results() function automatically performs independent filtering based on the mean of normalized counts for each gene, optimizing the number of genes which will have an adjusted p value below a given FDR cutoff, in this case 0.05. 
+So, basically, the new matrix result will be the same as dds but after filtering and optimizing the genes which will have and adj p value below 0.05
+
+```{r}
+result <- results(dds, alpha = 0.05)
+#The results table, when printed, will provide the information about the comparison, e.g. "log2 fold change:day27-35 vs day 12-13". If results is run without specifying contrast or name, it will return the comparison of the last level of the last variable in the design formula over the first level of this variable. For example, for a simple two-group comparison, this would return the log2 fold changes of the second group (day 27-35) over the first group (the control day12-13). 
+```
+
+How many adjusted p-values were less than 0.05?
+
+```{r}
+sum(result$padj < 0.05, na.rm = TRUE)
+```
+
+
+## Log fold change shrinkage for visualization and ranking
+
+Shrinkage of effect size (LFC estimates) is useful for visualization and ranking of genes. We pass the dds object to the function lfcShrink. Below we specify to use the "apeglm" method to effect size shrinkage.
+We provide the dds object and the name or number of the coefficient we want to shrink, which we know using the function resultsNames()
+
+```{r}
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+    #install.packages("BiocManager")
+
+#BiocManager::install("apeglm")
+```
+
+```{r}
+#lfcShrink would be doing the same as results() function but more strictly an shrinkage the effect size
+ape <- lfcShrink(dds = dds, coef = 2, type = "apeglm")
+sum(ape$padj < 0.05, na.rm = TRUE)
+```
+
+## MAplot
+
+In DESeq2, the plotMA function shows the log2 fold changes attributable to a given variable over the mean of normalized counts for all the samples in the DESeqDataSet
+
+```{r}
+# without shrinkage. Not used in the memory
+plotMA(result, ylim=c(-10,10), cex=.6)
+```
+
+It is more useful to visualize the MAplot for the shrunken log2 fold changes, which remove the noise associated with log2 fold changes from low count genes without requiring arbitrary filtering thresholds:
+
+```{r}
+# with shrinkage
+plotMA(ape, ylim=c(-10,10), cex=.6)
+```
+
+## Annotation of the results
+
+For the annotation we need to use the same file that was used for the mapping in STAR step. In this case, we already got the mapped counts, so we can use the previous table that we generated. We will use the shrinkaged file for further analysis
+
+```{r}
+#We will need to make every result a data frame. 
+ape_df <- data.frame(ape)
+```
+
+```{r}
+# we import the human genome that was used previously in the mapping step
+gtf <- import("C:/Users/HR Sergio/Desktop/Homo_sapiens.GRCh38.103.gtf")
+# we generate a data frame from the gtf object
+annotation_genes <- data.frame(gtf)
+# we take only the columns of interest. In this case, the gene name and the gene id to generate a gene_names data frame that will be used later 
+gene_names <- annotation_genes[,c(10,12)]
+colnames(gene_names) <- c("Gene","GeneName")
+```
+
+
+```{r}
+##With the following command we will call to the first column GeneName
+ape_df <- ape_df %>% 
+  rownames_to_column(var = "Gene")
+
+##With this one we will join both data frames by GeneName and use the distincit() function to remove duplicates
+ape_df <- left_join(ape_df,
+          gene_names,
+          by = "Gene") %>% 
+  distinct(Gene, .keep_all = TRUE)
+```
+
+To save it:
+
+```{r}
+write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/CRB_d27-35vsd12-13.tsv")
+```
+
+## Arrange DE genes according to their adjusted p-value
+
+We are going to establish a threshold of an adjusted p-value lower than 0.05
+
+for the shrinkaged file:
+
+```{r}
+subset(ape_df, padj < 0.05) -> sig_genes_d35_vs_d1213
+# we export it in tsv format
+write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/sig_genes_CRB_d27-35vsd12-13.tsv")
+```
+
+
+## RPKM calculation
+
+We are going to extract the rawcounts from the dds object that has already a filtering step. 
+
+```{r}
+rawcount_2 <- counts(dds)
+```
+
+```{r}
+# we take only the columns of interest from the human genome data frame that we generated before. In this case, the ensemble gene id and the gene length that we need to be able to generate rpkm
+gene_length <- annotation_genes[,c(4,10)]
+colnames(gene_length) <- c("Length","Gene")
+#remove duplicates in rows since sometimes there are more than one ensemble id for the same gene name (based on different transcripts)
+gene_length <- gene_length[!duplicated(gene_length[c('Gene')]), ]
+```
+
+```{r}
+#After extraction of the gene length, we transform the results from bp to kb
+gene_length <- gene_length %>% 
+    mutate(length_kb = Length/1000)
+gene_length
+  
+# scaling factor. Here we are obtaining the reads per million for each individual sample. It is row wise. This is indicated using the number 2 in the function. 
+  scale_factor <- apply(rawcount_2,
+    2, function(x) sum(x))/1000000
+  
+# normalize to library size using the scale factor of each sample. Basically, what we are doing here is to divide the raw counts of each gene by the scale factor of each sample. That means, the raw counts of the first gene in the first sample divided by the scale factor in the 8 different samples, and we get the norm counts of each gene in each sample
+norm_counts <- rawcount_2 %>%  
+    sweep(., 2, scale_factor, "/")
+
+# rpkm: To calculate it, first of all we join the two tables: rawcount_2 and gene_length
+rawcount_2 %>% as.data.frame() %>% 
+  rownames_to_column(var = "Gene") -> rawcount_2
+
+##With this one we will join both data frames by Gene
+all_info <- left_join(rawcount_2,
+          gene_length,
+          by = "Gene") %>% 
+  distinct(Gene, .keep_all = TRUE)
+
+#Now, we divide the normalized counts of each gene by the length of the gene in kb   
+rpkm <- norm_counts %>% 
+  sweep(., 1, all_info$length_kb, "/")
+rpkm %>% as.data.frame() %>% 
+  rownames_to_column(var = "Gene") -> rpkm
+#Now we use the previous data frame called gene_names to map it with the ensembl ones
+rpkm_final <- left_join(gene_names,
+          rpkm,
+          by = "Gene") %>% 
+  distinct(Gene, .keep_all = TRUE)
+```
+
+To save it:
+
+```{r}
+write_tsv(as.data.frame(rpkm_final),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/rpkm_final-d27-35vsd12-13.tsv")
+```
+
+## RPKM Heatmap of Cerebellum markers
+
+Once we generated rpkm for each sample, then we performed the average for each CONDITION (2 weeks-day12-13, 3-4 weeks-day21-27, 5 weeks-day35) and then we import that file to be used for the next heatmap:
+
+```{r}
+# Import the average rpkm for each condition
+library(readxl)
+RPKM <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/rpkm-AVERAGE-CRBOs.xlsx")
+# Remove duplicates
+RPKM <- RPKM[!duplicated(RPKM[c('Gene')]), ]
+```
+
+
+```{r}
+# Now we select a variety of genes that we know are markers for different cell types observed in the cerebellum, to see how it is their time-dependent gene expression
+library(dplyr)
+rpkm_df <-as.data.frame(filter(RPKM, Gene == "SOX1" | Gene == "SOX2" | Gene == "GBX2" | Gene == "PAX2" | Gene == "EN2" | Gene == "MAP2" | Gene == "TUBB3" | Gene == "RBFOX3" | Gene == "NCAM1" | Gene == "NCAM2" | Gene == "NEUROD1" | Gene == "OTX1" | Gene == "OTX2" | Gene == "PAX6" | Gene == "LMX1A" | Gene == "ATOH1" | Gene == "PTF1A" | Gene == "GSX1" | Gene == "KIRREL2" | Gene == "LHX2" | Gene == "TBR1" | Gene == "BARHL1" | Gene == "CEP131" | Gene == "KIF3A" | Gene == "ARL13B" | Gene == "IFT88" | Gene == "PVALB" | Gene == "EOMES" | Gene == "OLIG2" | Gene == "SKOR2" | Gene == "CALB1" | Gene == "CALB2" | Gene == "GAD1" | Gene == "LHX5" | Gene == "GRID2" | Gene == "GAD2" | Gene == "SHH" | Gene == "SMO" | Gene == "PTCH1" | Gene == "GLI1" | Gene == "CCND1" | Gene == "MYCN" | Gene == "OLIG1" | Gene == "SOX10"| Gene == "PDGFRA" | Gene == "CSPG4"| Gene == "GFAP" | Gene == "APOE"| Gene == "AQP4"))
+# This part is to keep the same order given above
+sub_anno <- structure(list(seq_share = c("A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A")), .Names = "state", row.names = c("SOX1","SOX2","GBX2","PAX2","EN2","MAP2","TUBB3","RBFOX3","NCAM1","NCAM2","NEUROD1","OTX1","OTX2","PAX6","LMX1A","ATOH1","PTF1A","GSX1","KIRREL2","LHX2","TBR1","BARHL1","CEP131","KIF3A","ARL13B","IFT88","PVALB","EOMES","OLIG2","SKOR2","CALB1","CALB2","GAD1","LHX5","GRID2","GAD2","SHH","SMO","PTCH1","GLI1","CCND1","MYCN","OLIG1","SOX10","PDGFRA","CSPG4","GFAP","APOE","AQP4"), class = "data.frame")
+rpkm_df <- tibble::column_to_rownames(rpkm_df, "Gene")
+# Here we say that we want to keep the same order as mentioned above
+rpkm_df_ordered <- rpkm_df[rownames(sub_anno), ]
+# We generate the heatmap
+a <- pheatmap(rpkm_df_ordered,  scale= "row", cluster_cols = FALSE, show_rownames = TRUE, show_colnames = FALSE, cluster_rows = FALSE, fontsize_row = 5)
+```
+
+# D35 VS D12-13
+
+## Start of the analysis.
+
+```{r}
+library(readxl)
+rawcounts <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/salmon/Table_Rawcounts_.xlsx")
+colnames(rawcounts) <- c("gene_id", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+rawcounts$d12_s2 <- as.integer(as.character(rawcounts$d12_s2))
+rawcounts$d12_s3 <- as.integer(as.character(rawcounts$d12_s3))
+rawcounts$d13_s1 <- as.integer(as.character(rawcounts$d13_s1))
+rawcounts$d13_s2 <- as.integer(as.character(rawcounts$d13_s2))
+rawcounts$d27_s1 <- as.integer(as.character(rawcounts$d27_s1))
+rawcounts$d27_s2 <- as.integer(as.character(rawcounts$d27_s2))
+rawcounts$d35_s1 <- as.integer(as.character(rawcounts$d35_s1))
+rawcounts$d35_s2 <- as.integer(as.character(rawcounts$d35_s2))
+rawcounts$d35_s3 <- as.integer(as.character(rawcounts$d35_s3))
+rawcounts %>% as.data.frame() %>% 
+  column_to_rownames(var ="gene_id") -> rawcounts
+#We remove d27 samples for the further analysis
+rawcounts <- rawcounts[,-c(5,6)]
+```
+
+## Creation of metadata
+
+```{r}
+age <- c("d12-13","d12-13","d12-13", "d12-13", "d35", "d35","d35")
+info.data <- data.frame(age)
+info.data
+rownames(info.data) <- c("d12_s2","d12_s3","d13_s1", "d13_s2", "d35_s1", "d35_s2","d35_s3")
+info.data
+```
+
+## Check sample order
+
+```{r}
+all(rownames(info.data) == colnames(rawcounts))
+```
+
+## Create the DESeq2 object
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = rawcounts,
+                              colData = info.data,
+                              design = ~ age)
+dds
+dds$age <- factor(dds$age, levels = c("d12-13", "d35"))
+```
+
+
+## Unsupervised clustering analysis: log transformation 
+
+```{r}
+vst <- vst(dds, blind = TRUE)
+```
+
+## Heatmap of the sample-to-sample correlation
+
+```{r}
+vst_matrix <- assay(vst) 
+dim(vst_matrix)
+vst_cor <- cor(vst_matrix)
+pheatmap(vst_cor, cluster_cols = TRUE, show_rownames = TRUE, show_colnames = FALSE, cluster_rows = TRUE, annotation_col = info.data)
+```
+
+## Heatmap of the sample-to-sample distances. Extracting transformed values
+
+
+```{r}
+vsd <- vst(dds, blind=FALSE)
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$genotype)
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix, cluster_rows = TRUE, cluster_cols = TRUE,col=colors)
+```
+
+## PCA
+
+```{r}
+plotPCA(vst, intgroup = c("age"))
+```
+## Differentail expression analysis
+
+
+```{r}
+dds <- DESeq(dds)
+result <- results(dds, alpha = 0.05)
+summary(result)
+sum(result$padj < 0.05, na.rm = TRUE)
+```
+
+## Log fold change shrinkage for visualization and ranking
+
+```{r}
+ape <- lfcShrink(dds = dds, coef = 2, type = "apeglm")
+sum(ape$padj < 0.05, na.rm = TRUE)
+```
+## MAplot
+
+```{r}
+plotMA(result, ylim=c(-10,10), cex=.6)
+```
+
+```{r}
+plotMA(ape, ylim=c(-10,10), cex=.6)
+```
+
+## Annotation of the results
+
+```{r}
+ape_df <- data.frame(ape)
+gtf <- import("C:/Users/HR Sergio/Desktop/Homo_sapiens.GRCh38.103.gtf")
+annotation_genes <- data.frame(gtf)
+gene_names <- annotation_genes[,c(10,12)]
+colnames(gene_names) <- c("Gene","GeneName")
+```
+
+```{r}
+ape_df <- ape_df %>% 
+  rownames_to_column(var = "Gene")
+ape_df <- left_join(ape_df,
+          gene_names,
+          by = "Gene") %>% 
+  distinct(Gene, .keep_all = TRUE)
+```
+
+
+```{r}
+write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/CRB_d35vsd12-13.tsv")
+```
+
+## Arrange DE genes according to their adjusted p-value
+
+```{r}
+subset(ape_df, padj < 0.05) -> sig_genes_d35_vs_d1213
+write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/sig_genes_CRB_d35vsd12-13.tsv")
+```
