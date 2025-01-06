@@ -1,0 +1,190 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-12-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(DESeq2)
+library(edgeR)
+library(RColorBrewer)
+library(rtracklayer)
+library(Rsamtools)
+library(GenomicFeatures)
+library(AnnotationDbi)
+library(GenomicRanges)
+library(RUVSeq)
+library(apeglm)
+library(pheatmap)
+```
+
+
+# BATCH CORRECTION 
+
+## Start of the analysis.
+
+```{r}
+# Import rawcounts generated from Salmon after the previous RNA-seq analysis
+library(readxl)
+rawcounts_2 <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/salmon/Table_Rawcounts_.xlsx")
+rawcounts_1 <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output NEW/Table-Rawcounts.xlsx")
+rawcounts <- left_join(rawcounts_1,
+          rawcounts_2,
+          by = "gene_id") %>% 
+  distinct(gene_id, .keep_all = TRUE)
+rawcounts <- rawcounts[,c(1,2,3,4,7,8,9,10,11,12,13,14,15)]
+# Change names of the columns
+colnames(rawcounts) <- c("gene_id", "d0_s2_G","d0_s2_I","d0_s3_G", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+# Be sure all raw counts data is an integer
+rawcounts$d0_s2_G <- as.integer(as.character(rawcounts$d0_s2_G))
+rawcounts$d0_s2_I <- as.integer(as.character(rawcounts$d0_s2_I))
+rawcounts$d0_s3_G <- as.integer(as.character(rawcounts$d0_s3_G))
+rawcounts$d12_s2 <- as.integer(as.character(rawcounts$d12_s2))
+rawcounts$d12_s3 <- as.integer(as.character(rawcounts$d12_s3))
+rawcounts$d13_s1 <- as.integer(as.character(rawcounts$d13_s1))
+rawcounts$d13_s2 <- as.integer(as.character(rawcounts$d13_s2))
+rawcounts$d27_s1 <- as.integer(as.character(rawcounts$d27_s1))
+rawcounts$d27_s2 <- as.integer(as.character(rawcounts$d27_s2))
+rawcounts$d35_s1 <- as.integer(as.character(rawcounts$d35_s1))
+rawcounts$d35_s2 <- as.integer(as.character(rawcounts$d35_s2))
+rawcounts$d35_s3 <- as.integer(as.character(rawcounts$d35_s3))
+# Convert the column with the gene id in rows to proceed with the further analysis
+rawcounts %>% as.data.frame() %>% 
+  column_to_rownames(var ="gene_id") -> rawcounts
+```
+
+# Filtering and exploratory data analysis
+
+Here, we perform a minimal pre-filtering to keep only rows that have 2 reads in at least two samples for each gene
+
+```{r}
+filtered <- apply(rawcounts, 1, function(x) length(x[x>=2])>=2) %>% 
+  rawcounts[.,]
+dim(filtered)
+```
+
+We keep 26982 genes
+
+
+# SeqExpressionSet from EDAseq - to make use of the plotting and normalizatin functionality
+
+We store the data in an object of S4 class SeqExpressionSet from the EDASeq package. This allows us to make full use of the plotting and normalization functionality of EDASeq. Note, however, that all the methods in RUVSeq are implemented for both SeqExpressionSet and matrix objects:
+
+```{r EDA}
+# prepare dataset
+x <- as.factor(c("0","0","0", "12","12","13", "13","27","27", "35", "35", "35"))
+set <- newSeqExpressionSet(as.matrix(filtered), phenoData = data.frame(x, row.names=colnames(filtered)))
+set
+info.data <- data.frame(x)
+rownames(info.data) <- c("d0_s2_G","d0_s2_I","d0_s3_G", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+```
+
+The boxplots of relative log expression (RLE = log-ratio of read count to median read count across sample) and plots of principal components (PC):
+
+```{r}
+# boxplot of RLE
+colors <- brewer.pal(3, "Set2")
+plotRLE(set, outline=FALSE, ylim=c(-4, 4), col=colors[x], xlab = "hBOs samples", ylab= "RLE")
+plotPCA(set, col=colors[x], cex=1.2)
+```
+
+We can see that samples cluster quite good already according to their age or time in culture. It seems that a betwen-sample normalization (library normalization) is not mandatory, but we perform it anyway.
+
+We can use the betweenLaneNormalization function of EDASeq to normalize the data using upper-quartile (UQ) normalization:
+
+```{r}
+# upper-quartile normalization
+set <- betweenLaneNormalization(set, which="upper")
+plotRLE(set, outline=FALSE, ylim=c(-4, 4), col=colors[x],  xlab = "hBOs samples", ylab= "RLE")
+plotPCA(set, col=colors[x], cex=1.2)
+```
+
+Ineed, PCA plot looks quite similar, althought boxplot looks better. In these samples there is not a huge batch effect. Anywaym we will apply a batch correction to see it the outcome improves
+
+# empirical control genes "in silico"
+
+To estimate the factors of unwanted variation, we need a set of negative control genes, i.e., genes that can be assumed not to be influenced by the covariates of interest. If no genes are known a priori not to be influenced by the covariates of interest, one can obtain a set of “in-silico empirical” negative controls, e.g., least significantly DE genes based on a first-pass DE analysis performed prior to RUVg normalization.
+
+
+```{r}
+design <- model.matrix(~x, data=pData(set))
+y <- DGEList(counts=counts(set), group=x) # from EdgeR,creates a DGEList object from a table of counts 
+y <- calcNormFactors(y, method="upperquartile") # we can choose TMM, RLE, and upperquartile. We choose the last one according to the previous results
+y <- estimateGLMCommonDisp(y, design) # Estimates common negative binomial dispersion parameter 
+y <- estimateGLMTagwiseDisp(y, design)
+fit <- glmFit(y, design) # Fit a negative binomial generalized log-linear model to the read counts for each gene
+lrt <- glmLRT(fit, coef=2)
+top <- topTags(lrt, n=nrow(set))$table
+empirical <- rownames(set)[which(!(rownames(set) %in% rownames(top)[1:5000]))]
+```
+
+# RUVg
+
+The RUVg function returns two pieces of information: the estimated factors of unwanted variation (added as columns to the phenoData slot of set) and the normalized counts obtained by regressing the original counts on the unwanted factors (empirical). The normalized values are stored in the normalizedCounts slot of set and can be accessed with the normCounts method. These counts should be used only for exploration. It is important that subsequent DE analysis is done on the original counts (accessible through the counts method), as removing the unwanted factors from the counts can also remove part of a factor of interest.
+
+```{r}
+set2 <- RUVg(set, empirical, k=1)
+pData(set2)
+plotRLE(set2, outline=FALSE, ylim=c(-4, 4), col=colors[x])
+plotPCA(set2, col=colors[x], cex=1.2)
+```
+According to the PCA plot, now d0 and d35 cluster together at the left side of the PC1. This is not biologically true, so some artifacts have been included in the batch correction.
+
+## Better PCA
+```{r}
+# modified from the EDAseq source code
+# input object: normalized counts using upper quartile normalization
+# change group names and number in the function!!
+betterPCA <- function(object, k=2, labels=TRUE, isLog=FALSE) {
+  if(!isLog) {
+    Y <- apply(log(object+1), 1, function(y) scale(y, center=TRUE, scale=FALSE))
+    } else {
+      Y <- apply(object, 1, function(y) scale(y, center=TRUE, scale=FALSE))
+      }
+  s <- svd(Y)
+  percent <- s$d^2/sum(s$d^2)*100
+  labs <- sapply(seq_along(percent), function(i) {
+    paste("PC ", i, " (", round(percent[i], 2), "%)", sep="")
+    })
+  
+  if(k>ncol(object)) {
+    stop("The number of PCs must be less than the number of samples.")
+    }
+  if(k<2) {
+    stop("The number of PCs must be at least 2.")
+    } else if (k==2) {
+      x <-  as.factor(c("0","0","0", "12","12","13", "13","27","27", "35", "35", "35"))
+      ggplot( data = as.data.frame(s$u), mapping = aes(x=V1, y=V2, color = x)) +
+        geom_jitter(cex=4) +
+        theme(axis.title.x=element_blank()) +
+        expand_limits(y=0) +
+        ylab(labs[2]) +
+        xlab(labs[1]) +
+        theme_bw() + 
+        theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+        theme(legend.title=element_blank())
+    }
+      
+}
+
+betterPCA(normCounts(set))
+betterPCA(normCounts(set2))
+
+# get the PCA data
+Y <- apply(log(normCounts(set2)+1), 1, function(y) scale(y, center=TRUE, scale=FALSE)) # normCounts(set2): after quartile normalization
+s <- svd(Y)
+percent <- s$d^2/sum(s$d^2)*100
+labs <- sapply(seq_along(percent), function(i) {
+  paste("PC ", i, " (", round(percent[i], 2), "%)", sep="")
+  })
+
+barplot(s$d^2/sum(s$d^2))
+```
+
+Here we can compare both PCA plots and we can conclude that the first PCA plot, without batch correction, it looks more biologically relevant.

@@ -19,6 +19,7 @@ library(RColorBrewer)
 library(pheatmap)
 ```
 
+
 # D27-35 VS D12-13
 
 ## Start of the analysis.
@@ -177,14 +178,14 @@ In DESeq2, the plotMA function shows the log2 fold changes attributable to a giv
 
 ```{r}
 # without shrinkage. Not used in the memory
-plotMA(result, ylim=c(-10,10), cex=.6)
+DESeq2::plotMA(result, ylim=c(-10,10), cex=.6)
 ```
 
 It is more useful to visualize the MAplot for the shrunken log2 fold changes, which remove the noise associated with log2 fold changes from low count genes without requiring arbitrary filtering thresholds:
 
 ```{r}
 # with shrinkage
-plotMA(ape, ylim=c(-10,10), cex=.6)
+DESeq2::plotMA(ape, ylim=c(-10,10), cex=.6)
 ```
 
 ## Annotation of the results
@@ -222,7 +223,7 @@ ape_df <- left_join(ape_df,
 To save it:
 
 ```{r}
-write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/CRB_d27-35vsd12-13.tsv")
+write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d27-35vsd12-13/CRB_d27-35vsd12-13.tsv")
 ```
 
 ## Arrange DE genes according to their adjusted p-value
@@ -234,7 +235,7 @@ for the shrinkaged file:
 ```{r}
 subset(ape_df, padj < 0.05) -> sig_genes_d35_vs_d1213
 # we export it in tsv format
-write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/sig_genes_CRB_d27-35vsd12-13.tsv")
+write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d27-35vsd12-13/sig_genes_CRB_d27-35vsd12-13.tsv")
 ```
 
 
@@ -293,17 +294,18 @@ rpkm_final <- left_join(gene_names,
 To save it:
 
 ```{r}
-write_tsv(as.data.frame(rpkm_final),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/rpkm_final-d27-35vsd12-13.tsv")
+write_tsv(as.data.frame(rpkm_final),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/rpkm-final.tsv")
 ```
+
 
 ## RPKM Heatmap of Cerebellum markers
 
-Once we generated rpkm for each sample, then we performed the average for each CONDITION (2 weeks-day12-13, 3-4 weeks-day21-27, 5 weeks-day35) and then we import that file to be used for the next heatmap:
+Once we generated rpkm for each sample, then we performed the average for each CONDITION (hESC-day0,2 weeks-day12-13, 4 weeks-day27, 5 weeks-day35) and then we import that file to be used for the next heatmap:
 
 ```{r}
 # Import the average rpkm for each condition
 library(readxl)
-RPKM <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/rpkm-AVERAGE-CRBOs.xlsx")
+RPKM <- read_excel("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/rpkm_average.xlsx")
 # Remove duplicates
 RPKM <- RPKM[!duplicated(RPKM[c('Gene')]), ]
 ```
@@ -321,6 +323,9 @@ rpkm_df_ordered <- rpkm_df[rownames(sub_anno), ]
 # We generate the heatmap
 a <- pheatmap(rpkm_df_ordered,  scale= "row", cluster_cols = FALSE, show_rownames = TRUE, show_colnames = FALSE, cluster_rows = FALSE, fontsize_row = 5)
 ```
+
+
+
 
 # D35 VS D12-13
 
@@ -405,6 +410,8 @@ pheatmap(sampleDistMatrix, cluster_rows = TRUE, cluster_cols = TRUE,col=colors)
 ```{r}
 plotPCA(vst, intgroup = c("age"))
 ```
+
+
 ## Differentail expression analysis
 
 
@@ -424,7 +431,7 @@ sum(ape$padj < 0.05, na.rm = TRUE)
 ## MAplot
 
 ```{r}
-plotMA(result, ylim=c(-10,10), cex=.6)
+DESeq2::plotMA(result, ylim=c(-10,10), cex=.6)
 ```
 
 ```{r}
@@ -452,12 +459,555 @@ ape_df <- left_join(ape_df,
 
 
 ```{r}
-write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/CRB_d35vsd12-13.tsv")
+write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/CRB_d35vsd12-13.tsv")
 ```
 
 ## Arrange DE genes according to their adjusted p-value
 
 ```{r}
 subset(ape_df, padj < 0.05) -> sig_genes_d35_vs_d1213
-write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/Deseq2/sig_genes_CRB_d35vsd12-13.tsv")
+write_tsv(as.data.frame(sig_genes_d35_vs_d1213),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/sig_genes_CRB_d35vsd12-13.tsv")
+```
+
+Here we received new samples from hESC RNA sequencing that were considered as day 0
+
+## BARPLOTS FROM ENRICHMENT FILES 
+
+### UPREGULATION
+
+#### BioPlanet enrichr
+
+```{r}
+# First we need to install and call the library readxl in order to import the file downloaded from ENRICHR
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+BioPlanet <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/UPREGULATION/BioPlanet_2019_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(BioPlanet$`Adjusted P-value`) -> BioPlanet$`Adjusted P-value`
+as.numeric(BioPlanet$`P-value`) -> BioPlanet$`P-value`
+# We select only the columns we are interested on
+BioPlanet_FDR <- BioPlanet[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+BioPlanet_FDR_top10 <- BioPlanet_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(BioPlanet_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#To make the plot, we need the function ggplot from the tidyverse library
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is grey
+BioPlanet_plot <- ggplot(BioPlanet_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#999999") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 BioPlanet pathway") +
+    ylab("-log10(pval)")
+BioPlanet_plot <- BioPlanet_plot + theme(text = element_text(size = 5))
+BioPlanet_plot
+```
+
+
+#### KEGG enrichr
+
+```{r}
+# First we need to install and call the library readxl in order to import the file from the computer
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+KEGG <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/UPREGULATION/KEGG_2021_Human_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(KEGG$`Adjusted P-value`) -> KEGG$`Adjusted P-value`
+as.numeric(KEGG$`P-value`) -> KEGG$`P-value
+# We select only the columns we are interested on
+KEGG_FDR <- KEGG[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+KEGG_FDR_top10 <- KEGG_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(KEGG_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is brown
+KEGG_plot <- ggplot(KEGG_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="brown3") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 KEGG pathway") +
+    ylab("-log10(pval)")
+KEGG_plot <- KEGG_plot + theme(text = element_text(size = 5))
+KEGG_plot
+```
+
+#### GO CELLULAR COMPONENT Enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+GO_Cellular_Component <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/UPREGULATION/GO_Cellular_Component_2023_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(GO_Cellular_Component$`Adjusted P-value`) -> GO_Cellular_Component$`Adjusted P-value`
+as.numeric(GO_Cellular_Component$`P-value`) -> GO_Cellular_Component$`P-value`
+# We select only the columns we are interested on
+GO_Cellular_Component_FDR <- GO_Cellular_Component[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+GO_Cellular_Component_FDR_top10 <- GO_Cellular_Component_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(GO_Cellular_Component_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is yellow
+GO_Cellular_Component_plot <- ggplot(GO_Cellular_Component_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#E69F00") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 GO Celluar Component") +
+    ylab("-log10(pval)")
+GO_Cellular_Component_plot <- GO_Cellular_Component_plot + theme(text = element_text(size = 5))
+GO_Cellular_Component_plot
+```
+
+#### Ingenuity Pathway Analysis 
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+IPA_UP <- read_excel("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/IPA/upregulation.xlsx")
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(IPA_UP$LOGP) -> IPA_UP$LOGP
+# We confirm that they are numeric class
+class(IPA_UP$LOGP) 
+# We select only the columns we are interested on
+IPA_UP_FDR <- IPA_UP[,-c(3,4,5)]
+# And now only the first 20 rows/pathways
+IPA_UP_FDR_top20 <- IPA_UP_FDR[c(1:20),]
+#And we change the name of the columns
+colnames(IPA_UP_FDR_top20) <- c("Term", "LOGP")
+#And now we make the plot using -log10 pval for the representation of the top5 entiched pathways. The number in the fill part represent a color, in this case is blue
+IPA_UP_plot <- ggplot(IPA_UP_FDR_top20, aes(x=reorder(Term, LOGP), y=LOGP)) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="blue") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 20 IPA") +
+    ylab("-log10(pval)")
+IPA_UP_plot <- IPA_UP_plot + theme(text = element_text(size = 5))
+IPA_UP_plot
+```
+
+### DOWNREGULATION
+
+#### BioPlanet enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+BioPlanet <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/DOWNREGULATION/BioPlanet_2019_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(BioPlanet$`Adjusted P-value`) -> BioPlanet$`Adjusted P-value`
+as.numeric(BioPlanet$`P-value`) -> BioPlanet$`P-value`
+# We confirm that they are numeric class
+class(BioPlanet$Adjusted.P.value) 
+# We select only the columns we are interested on
+BioPlanet_FDR <- BioPlanet[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+BioPlanet_FDR_top10 <- BioPlanet_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(BioPlanet_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is grey
+BioPlanet_plot <- ggplot(BioPlanet_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#999999") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 BioPlanet pathway") +
+    ylab("-log10(pval)")
+BioPlanet_plot <- BioPlanet_plot + theme(text = element_text(size = 5))
+BioPlanet_plot
+```
+
+
+#### KEGG enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+KEGG <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/DOWNREGULATION/KEGG_2021_Human_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(KEGG$`Adjusted P-value`) -> KEGG$`Adjusted P-value`
+as.numeric(KEGG$`P-value`) -> KEGG$`P-value`
+# We select only the columns we are interested on
+KEGG_FDR <- KEGG[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+KEGG_FDR_top10 <- KEGG_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(KEGG_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is brown
+KEGG_plot <- ggplot(KEGG_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="brown3") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 KEGG pathway") +
+    ylab("-log10(pval)")
+KEGG_plot <- KEGG_plot + theme(text = element_text(size = 5))
+KEGG_plot
+```
+
+#### GO CELLULAR COMPONENT
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+GO_Cellular_Component <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/ENRICHR/DOWNREGULATION/GO_Cellular_Component_2023_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(GO_Cellular_Component$`Adjusted P-value`) -> GO_Cellular_Component$`Adjusted P-value`
+as.numeric(GO_Cellular_Component$`P-value`) -> GO_Cellular_Component$`P-value`
+# We select only the columns we are interested on
+GO_Cellular_Component_FDR <- GO_Cellular_Component[,c(1,3,4,9)]
+# And now only the first 5 rows/pathways
+GO_Cellular_Component_FDR_top10 <- GO_Cellular_Component_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(GO_Cellular_Component_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+library(tidyverse)
+#And now we make the plot using -log10 pval for the representation of the top5 entiched pathways. The number in the fill part represent a color, in this case is yellow
+GO_Cellular_Component_plot <- ggplot(GO_Cellular_Component_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#E69F00") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 GO Cellular components") +
+    ylab("-log10(pval)")
+GO_Cellular_Component_plot <- GO_Cellular_Component_plot + theme(text = element_text(size = 5))
+GO_Cellular_Component_plot
+```
+
+#### Ingenuity Pathway Analysis 
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+IPA_UP <- read_excel("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd12-13/IPA/downregulation.xlsx")
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(IPA_UP$LOGP) -> IPA_UP$LOGP
+# We confirm that they are numeric class
+class(IPA_UP$LOGP) 
+# We select only the columns we are interested on
+IPA_UP_FDR <- IPA_UP[,-c(3,4,5)]
+# And now only the first 20 rows/pathways
+IPA_UP_FDR_top20 <- IPA_UP_FDR[c(1:20),]
+#And we change the name of the columns
+colnames(IPA_UP_FDR_top20) <- c("Term", "LOGP")
+#And now we make the plot using -log10 pval for the representation of the top5 entiched pathways. The number in the fill part represent a color, in this case is BLUE
+IPA_UP_plot <- ggplot(IPA_UP_FDR_top20, aes(x=reorder(Term, LOGP), y=LOGP)) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="blue") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 20 IPA") +
+    ylab("-log10(pval)")
+IPA_UP_plot <- IPA_UP_plot + theme(text = element_text(size = 5))
+IPA_UP_plot
+```
+
+# D35 vs D0
+
+## Start of the analysis.
+
+```{r}
+# Import rawcounts generated from Salmon after the previous RNA-seq analysis
+library(readxl)
+rawcounts_2 <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output/salmon/Table_Rawcounts_.xlsx")
+rawcounts_1 <- read_excel("C:/Users/HR Sergio/Desktop/Postdoc/Cerebellum project/RNA-seq output NEW/Table-Rawcounts.xlsx")
+rawcounts <- left_join(rawcounts_1,
+          rawcounts_2,
+          by = "gene_id") %>% 
+  distinct(gene_id, .keep_all = TRUE)
+#There are some columns that are samples from another project that we don't need here. They are columns 5 and 6
+rawcounts <- rawcounts[,c(1,2,3,4,7,8,9,10,11,12,13,14,15)]
+# Change names of the columns
+colnames(rawcounts) <- c("gene_id", "d0_s2_G","d0_s2_I","d0_s3_G", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+# Be sure all raw counts data is an integer
+rawcounts$d0_s2_G <- as.integer(as.character(rawcounts$d0_s2_G))
+rawcounts$d0_s2_I <- as.integer(as.character(rawcounts$d0_s2_I))
+rawcounts$d0_s3_G <- as.integer(as.character(rawcounts$d0_s3_G))
+rawcounts$d12_s2 <- as.integer(as.character(rawcounts$d12_s2))
+rawcounts$d12_s3 <- as.integer(as.character(rawcounts$d12_s3))
+rawcounts$d13_s1 <- as.integer(as.character(rawcounts$d13_s1))
+rawcounts$d13_s2 <- as.integer(as.character(rawcounts$d13_s2))
+rawcounts$d27_s1 <- as.integer(as.character(rawcounts$d27_s1))
+rawcounts$d27_s2 <- as.integer(as.character(rawcounts$d27_s2))
+rawcounts$d35_s1 <- as.integer(as.character(rawcounts$d35_s1))
+rawcounts$d35_s2 <- as.integer(as.character(rawcounts$d35_s2))
+rawcounts$d35_s3 <- as.integer(as.character(rawcounts$d35_s3))
+# Convert the column with the gene id in rows to proceed with the further analysis
+rawcounts %>% as.data.frame() %>% 
+  column_to_rownames(var ="gene_id") -> rawcounts
+```
+
+## Creation of metadata
+
+```{r}
+age <- c("d0","d0","d0", "d12-13","d12-13","d12-13", "d12-13","d27","d27", "d35", "d35", "d35")
+info.data <- data.frame(age)
+info.data
+rownames(info.data) <- c("d0_s2_G","d0_s2_I","d0_s3_G", "d12_s2","d12_s3","d13_s1", "d13_s2", "d27_s1", "d27_s2", "d35_s1", "d35_s2","d35_s3")
+info.data
+```
+
+## Check sample order
+
+```{r}
+all(rownames(info.data) == colnames(rawcounts))
+```
+
+## Create the DESeq2 object
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = rawcounts,
+                              colData = info.data,
+                              design = ~ age)
+dds
+dds$age <- factor(dds$age, levels = c("d0","d12-13", "d27","d35"))
+```
+
+
+## Unsupervised clustering analysis: log transformation 
+
+```{r}
+vst <- vst(dds, blind = TRUE)
+```
+
+## Heatmap of the sample-to-sample correlation
+
+```{r}
+vst_matrix <- assay(vst) 
+dim(vst_matrix)
+vst_cor <- cor(vst_matrix)
+pheatmap(vst_cor, cluster_cols = TRUE, show_rownames = TRUE, show_colnames = FALSE, cluster_rows = TRUE, annotation_col = info.data)
+```
+
+## Heatmap of the sample-to-sample distances. Extracting transformed values
+
+
+```{r}
+vsd <- vst(dds, blind=FALSE)
+sampleDists <- dist(t(assay(vsd)))
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$genotype)
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix, cluster_rows = TRUE, cluster_cols = TRUE,col=colors)
+```
+
+## PCA
+
+Please, check RUV+Deseq2 trial file
+
+## Differentail expression analysis
+
+
+```{r}
+dds <- DESeq(dds)
+```
+
+## Log fold change shrinkage for visualization and ranking
+
+```{r}
+# the following function is to know the order of the different comparisons, in order to put it later in the coef functions
+resultsNames(dds)
+# Here we are insterested in the comparison d35 vs d0, so the position 4
+ape <- lfcShrink(dds = dds, coef = 4, type = "apeglm")
+sum(ape$padj < 0.05, na.rm = TRUE)
+```
+## MAplot
+
+```{r}
+DESeq2::plotMA(ape, ylim=c(-10,10), cex=.6)
+```
+
+## Annotation of the results
+
+```{r}
+ape_df <- data.frame(ape)
+gtf <- import("C:/Users/HR Sergio/Desktop/Homo_sapiens.GRCh38.103.gtf")
+annotation_genes <- data.frame(gtf)
+gene_names <- annotation_genes[,c(10,12)]
+colnames(gene_names) <- c("Gene","GeneName")
+```
+
+```{r}
+ape_df <- ape_df %>% 
+  rownames_to_column(var = "Gene")
+ape_df <- left_join(ape_df,
+          gene_names,
+          by = "Gene") %>% 
+  distinct(Gene, .keep_all = TRUE)
+```
+
+
+```{r}
+write_tsv(as.data.frame(ape_df),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/CRB_d35vsd0.tsv")
+```
+
+## Arrange DE genes according to their adjusted p-value
+
+```{r}
+subset(ape_df, padj < 0.05) -> sig_genes_d35_vs_d0
+write_tsv(as.data.frame(sig_genes_d35_vs_d0),"C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/sig_genes_CRB_d35vsd0.tsv")
+```
+
+## BARPLOTS FROM ENRICHMENT FILES 
+
+### UPREGULATION
+
+#### BioPlanet enrichr
+
+```{r}
+# First we need to install and call the library readxl in order to import the file downloaded from ENRICHR
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+BioPlanet <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/UPREGULATION/BioPlanet_2019_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(BioPlanet$`Adjusted P-value`) -> BioPlanet$`Adjusted P-value`
+as.numeric(BioPlanet$`P-value`) -> BioPlanet$`P-value`
+# We select only the columns we are interested on
+BioPlanet_FDR <- BioPlanet[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+BioPlanet_FDR_top10 <- BioPlanet_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(BioPlanet_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#To make the plot, we need the function ggplot from the tidyverse library
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is grey
+BioPlanet_plot <- ggplot(BioPlanet_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#999999") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 BioPlanet pathway") +
+    ylab("-log10(pval)")
+BioPlanet_plot <- BioPlanet_plot + theme(text = element_text(size = 5))
+BioPlanet_plot
+```
+
+
+#### KEGG enrichr
+
+```{r}
+# First we need to install and call the library readxl in order to import the file from the computer
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+KEGG <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/UPREGULATION/KEGG_2021_Human_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(KEGG$`Adjusted P-value`) -> KEGG$`Adjusted P-value`
+as.numeric(KEGG$`P-value`) -> KEGG$`P-value`
+# We select only the columns we are interested on
+KEGG_FDR <- KEGG[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+KEGG_FDR_top10 <- KEGG_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(KEGG_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is brown
+KEGG_plot <- ggplot(KEGG_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="brown3") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 KEGG pathway") +
+    ylab("-log10(pval)")
+KEGG_plot <- KEGG_plot + theme(text = element_text(size = 5))
+KEGG_plot
+```
+
+#### GO CELLULAR COMPONENT Enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+GO_Cellular_Component <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/UPREGULATION/GO_Cellular_Component_2023_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(GO_Cellular_Component$`Adjusted P-value`) -> GO_Cellular_Component$`Adjusted P-value`
+as.numeric(GO_Cellular_Component$`P-value`) -> GO_Cellular_Component$`P-value`
+# We select only the columns we are interested on
+GO_Cellular_Component_FDR <- GO_Cellular_Component[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+GO_Cellular_Component_FDR_top10 <- GO_Cellular_Component_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(GO_Cellular_Component_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is yellow
+GO_Cellular_Component_plot <- ggplot(GO_Cellular_Component_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#E69F00") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 GO Celluar Component") +
+    ylab("-log10(pval)")
+GO_Cellular_Component_plot <- GO_Cellular_Component_plot + theme(text = element_text(size = 5))
+GO_Cellular_Component_plot
+```
+
+### DOWNREGULATION
+
+#### BioPlanet enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+BioPlanet <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/DOWNREGULATION/BioPlanet_2019_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(BioPlanet$`Adjusted P-value`) -> BioPlanet$`Adjusted P-value`
+as.numeric(BioPlanet$`P-value`) -> BioPlanet$`P-value`
+# We confirm that they are numeric class
+class(BioPlanet$Adjusted.P.value) 
+# We select only the columns we are interested on
+BioPlanet_FDR <- BioPlanet[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+BioPlanet_FDR_top10 <- BioPlanet_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(BioPlanet_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is grey
+BioPlanet_plot <- ggplot(BioPlanet_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#999999") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 BioPlanet pathway") +
+    ylab("-log10(pval)")
+BioPlanet_plot <- BioPlanet_plot + theme(text = element_text(size = 5))
+BioPlanet_plot
+```
+
+
+#### KEGG enrichr
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+KEGG <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/DOWNREGULATION/KEGG_2021_Human_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(KEGG$`Adjusted P-value`) -> KEGG$`Adjusted P-value`
+as.numeric(KEGG$`P-value`) -> KEGG$`P-value`
+# We select only the columns we are interested on
+KEGG_FDR <- KEGG[,c(1,3,4,9)]
+# And now only the first 10 rows/pathways
+KEGG_FDR_top10 <- KEGG_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(KEGG_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+#And now we make the plot using -log10 pval for the representation of the top10 enriched pathways. The number in the fill part represent a color, in this case is brown
+KEGG_plot <- ggplot(KEGG_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="brown3") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 KEGG pathway") +
+    ylab("-log10(pval)")
+KEGG_plot <- KEGG_plot + theme(text = element_text(size = 5))
+KEGG_plot
+```
+
+#### GO CELLULAR COMPONENT
+
+```{r}
+library(readxl)
+# Now we import it putting the path where they are located in your computer
+GO_Cellular_Component <- read_delim("C:/Users/HR Sergio/Desktop/TFM BIOINFO UOC/BIOINFO_MASTER_SH/d35vsd0/ENRICHR/DOWNREGULATION/GO_Cellular_Component_2023_table.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+#Now we convert all the numbers in numeric values to avoid that R recognizes them as characters
+as.numeric(GO_Cellular_Component$`Adjusted P-value`) -> GO_Cellular_Component$`Adjusted P-value`
+as.numeric(GO_Cellular_Component$`P-value`) -> GO_Cellular_Component$`P-value`
+# We select only the columns we are interested on
+GO_Cellular_Component_FDR <- GO_Cellular_Component[,c(1,3,4,9)]
+# And now only the first 5 rows/pathways
+GO_Cellular_Component_FDR_top10 <- GO_Cellular_Component_FDR[c(1:10),]
+#And we change the name of the columns
+colnames(GO_Cellular_Component_FDR_top10) <- c("Term", "pval", "FDR", "Genes")
+library(tidyverse)
+#And now we make the plot using -log10 pval for the representation of the top5 entiched pathways. The number in the fill part represent a color, in this case is yellow
+GO_Cellular_Component_plot <- ggplot(GO_Cellular_Component_FDR_top10, aes(x=reorder(Term, -log10(pval)), y=-log10(pval))) +
+    geom_bar(stat="identity", alpha=.6, width=.8, fill="#E69F00") +
+    coord_flip() +
+    theme_classic() +
+    xlab("Top 10 GO Cellular components") +
+    ylab("-log10(pval)")
+GO_Cellular_Component_plot <- GO_Cellular_Component_plot + theme(text = element_text(size = 5))
+GO_Cellular_Component_plot
 ```
